@@ -1,10 +1,10 @@
 from invoke import task, Collection
-from app import PACKAGE_VERSION, APP_NAME
+from app import PACKAGE_VERSION, APP_NAME, REDIS_HOST
 
 ns = Collection()
 
 NETWORK = APP_NAME + '_network'
-REDIS_CONT = APP_NAME + '_redis_db'
+REDIS_CONT = REDIS_HOST
 APP_IMG = '{app}_instance_{ver}'.format(app=APP_NAME, ver=PACKAGE_VERSION)
 
 
@@ -22,7 +22,8 @@ ns.add_task(buildApp)
 
 @task
 def redis(ctx):
-    ctx.run('docker run --name {redis} -d redis:alpine'.format(redis=REDIS_CONT))
+    ctx.run('docker rm -fv {redis}'.format(redis=REDIS_CONT))
+    ctx.run('docker run -p 6379:6379 --name {redis} -d redis:alpine'.format(redis=REDIS_CONT))
     networkConnect(ctx, REDIS_CONT)
 ns.add_task(redis)
 
@@ -33,6 +34,5 @@ def networkConnect(ctx, container):
         ctx.run('docker network create {net}'.format(net=NETWORK))
     except:
         pass
-    else:
-        ctx.run('docker network connect {net} {container}'.format(net=NETWORK, container=container))
+    ctx.run('docker network connect {net} {container}'.format(net=NETWORK, container=container))
 ns.add_task(networkConnect)
