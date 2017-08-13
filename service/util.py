@@ -7,10 +7,14 @@ import redis
 
 
 def get_random_string(n):
+    """ Create random string with len `n`
+    """
     return ''.join(random.choices(string.ascii_letters + string.digits, k=n))
 
 
 def get_redis_connect():
+    """ Create connection instance
+    """
     from service.C import REDIS_HOST, REDIS_PORT, REDIS_DB
     pool = redis.ConnectionPool(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
     r = redis.Redis(connection_pool=pool)
@@ -18,6 +22,8 @@ def get_redis_connect():
 
 
 def get_succes_chance():
+    """ Return chance of 5% for mailformed message
+    """
     return random.randint(1,20) != 1
 
 

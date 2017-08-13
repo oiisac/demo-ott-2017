@@ -17,6 +17,9 @@ logger = logging.getLogger(logger_name)
 
 
 def set_as_dealer(connection):
+    """ Set current app as message dealer if dealer not exist
+        or update dealer key
+    """
     with connection.pipeline() as pipe:
         pipe.watch(DEALER_KEY)
         current_dealer = pipe.get(DEALER_KEY)
@@ -33,6 +36,8 @@ def set_as_dealer(connection):
 
 
 def send_message(connection):
+    """ Send message with random value to DB
+    """
     message = util.get_random_string(30)
     key = '{pfx}_{time}_{app}'.format(pfx=MESSAGE_KEY_PFX, time=util.get_time_in_ms(), app=APP_ID)
     try:
@@ -46,6 +51,8 @@ def send_message(connection):
 
 
 def read_message(connection):
+    """ Read message from DB and mark it with error key if succes == False
+    """
     succes = util.get_succes_chance()
     message = ''
     with connection.pipeline() as pipe:
@@ -81,6 +88,8 @@ def read_message(connection):
 
 
 def read_erros(connection):
+    """ Read and delete all error messages from DB
+    """
     keys = connection.scan_iter(match=ERROR_KEY_PFX + '*')
     with connection.pipeline() as pipe:
         for key in keys:
@@ -91,6 +100,8 @@ def read_erros(connection):
 
 
 def clean_db(connection):
+    """ Clean DB
+    """
     connection.flushdb()
     print('All keys deleted.')
 
