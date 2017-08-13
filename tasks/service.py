@@ -13,8 +13,8 @@ def run(ctx):
         ctx.run('docker volume create {name}'.format(name=LOG_VOLUME))
     except:
         pass
-    for i in range(2, INST_NUMBER):
-        ctx.run('''docker run -d --net={net} -v logs:/var/logs/ \
+    for i in range(0, INST_NUMBER):
+        ctx.run('''docker run -d --net={net} -v logs:/tmp/{app}/ \
                    --name={app}_{ver}_{i} \
                    {img}:latest \
                    sh -c "python service/main.py"'''.format(net=NETWORK, img=APP_IMG, app=APP_NAME,
@@ -32,7 +32,7 @@ service_collection.add_task(stop)
 @task
 def errors(ctx):
     """ Print all errors from DB"""
-    ctx.run('''docker run --rm --net={net} -v logs:/var/logs/ \
+    ctx.run('''docker run --rm --net={net} \
                -e GET_ERRORS=True \
                {img}:latest \
                sh -c "python service/main.py"'''.format(net=NETWORK, img=APP_IMG))
@@ -42,8 +42,17 @@ service_collection.add_task(errors)
 @task
 def clean(ctx):
     """ Clean DB"""
-    ctx.run('''docker run --rm --net={net} -v logs:/var/logs/ \
+    ctx.run('''docker run --rm --net={net} \
                -e CLEAN_DB=True \
                {img}:latest \
                sh -c "python service/main.py"'''.format(net=NETWORK, img=APP_IMG))
 service_collection.add_task(clean)
+
+
+@task
+def logs(ctx):
+    """ Get all logs"""
+    ctx.run('''docker run --rm -v logs:/tmp/{app}/\
+               {img}:latest \
+               sh -c "tail /tmp/{app}/*.log"'''.format(app=APP_NAME, img=APP_IMG))
+service_collection.add_task(logs)

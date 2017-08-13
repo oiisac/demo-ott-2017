@@ -7,10 +7,12 @@ from redis.exceptions import WatchError
 from service import util
 from service.C import APP_ID, APP_NAME, DEALER_KEY, MESSAGE_KEY_PFX, ERROR_KEY_PFX, SLEEP_TIME, DEALER_KEY_TTL
 
-
-logger = logging.getLogger('{app}_{id}'.format(app=APP_NAME, id=APP_ID))
+logger_name = '{app}_{id}'.format(app=APP_NAME, id=APP_ID)
 logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    handlers=[logging.FileHandler('/tmp/{app}/{name}.log'.format(name=logger_name, app= APP_NAME)),])
+
+logger = logging.getLogger(logger_name)
 
 
 def set_as_dealer(connection):
