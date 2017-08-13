@@ -116,4 +116,4 @@ if __name__ == "__main__":
                 send_message(connection)
             else:
                 read_message(connection)
-            sleep(0.5)
+            sleep(SLEEP_TIME)
