@@ -15,39 +15,24 @@ DEALER_KEY_TTL = 1 # in seconds
 
 logger = logging.getLogger('{app}_{id}'.format(app=APP_NAME, id=APP_ID))
 logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
 
-def get_connect():
-    pool = redis.ConnectionPool(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB)
-    r = redis.Redis(connection_pool=pool)
-    return r
-
-def is_actual_dealer(connection):
-    current_dealer = connection.get(DEALER_KEY)
-    if current_dealer:
-        if current_dealer.decode('utf-8') == APP_ID:
-            return True
-        else:
-            return False
-    logger.info('App with {id} is new dealer'.format(id=APP_ID))
-    return True
-
-
-def set_as_current_dealer(connection):
+def set_as_dealer(connection):
     with connection.pipeline() as pipe:
-        while True:
-            try:
-                pipe.watch(DEALER_KEY)
-                pipe.multi()
+        pipe.watch(DEALER_KEY)
+        current_dealer = pipe.get(DEALER_KEY)
+        if current_dealer:
+            if current_dealer.decode('utf-8') == APP_ID:
                 pipe.set(DEALER_KEY, APP_ID, ex=DEALER_KEY_TTL)
-                pipe.execute()
-                break
-            except WatchError:
-                return False
-            finally:
-                pipe.reset()
-    return True
+        else:
+            pipe.set(DEALER_KEY, APP_ID, ex=DEALER_KEY_TTL)
+            logger.info('App with {id} is new dealer'.format(id=APP_ID))
+        pipe.watch(DEALER_KEY)
+        new_dealer = pipe.get(DEALER_KEY)
+        pipe.execute()
+    return new_dealer.decode('utf-8') == APP_ID
+
 
 def send_message(connection):
     message = get_random_string(30)
@@ -83,9 +68,9 @@ def read_message(connection, key=None):
                         result = pipe.execute()
                         break
                     except WatchError:
-                        pass
                     finally:
                         pipe.reset()
+
             message = result[0].decode('utf-8')
             if succes:
                 logger.info('App with {id} read key \"{key}\" with message \"{msg}\"'.format(id=APP_ID,
@@ -100,7 +85,10 @@ def read_erros(connection):
     keys = connection.keys(pattern='err_*')
     if keys:
         print(*[msg.decode('utf-8') + '\n' for msg in connection.mget(keys)])
-        [connection.delete(key) for key in keys]
+        with connection.pipeline() as pipe:
+            for key in keys:
+                pipe.delete(key)
+            pipe.execute()
 
 
 if __name__ == "__main__":
@@ -115,10 +103,8 @@ if __name__ == "__main__":
         read_erros(connection)
     else:
         while True:
-            if is_actual_dealer(connection):
-                if set_as_current_dealer(connection):
-                    send_message(connection)
-                    sleep(0.5)
+            if set_as_dealer(connection):
+                send_message(connection)
             else:
-
                 read_message(connection)
+            sleep(0.5)
