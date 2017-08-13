@@ -7,7 +7,8 @@ version = "0.5.0"
 install_requires = [
     "redis",
     "invoke",
-    "bumpversion"
+    "bumpversion",
+    "nose"
 ]
 
 setuptools.setup(

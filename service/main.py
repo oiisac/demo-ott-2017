@@ -10,7 +10,8 @@ from service.C import APP_ID, APP_NAME, DEALER_KEY, MESSAGE_KEY_PFX, ERROR_KEY_P
 logger_name = '{app}_{id}'.format(app=APP_NAME, id=APP_ID)
 logging.basicConfig(level=logging.INFO,
                     format='%(asctime)s - %(levelname)s - %(message)s',
-                    handlers=[logging.FileHandler('/tmp/{app}/{name}.log'.format(name=logger_name, app= APP_NAME)),])
+                    handlers=[logging.FileHandler('/tmp/{app}/{name}.log'.format(name=logger_name, app= APP_NAME)),
+                              logging.StreamHandler()])
 
 logger = logging.getLogger(logger_name)
 
