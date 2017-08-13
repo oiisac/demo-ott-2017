@@ -4,17 +4,8 @@ from time import sleep
 
 from redis.exceptions import WatchError
 
-from app import APP_NAME
-from app import util
-
-
-APP_ID = util.get_random_string(5)
-DEALER_KEY = 'dealer'
-MESSAGE_KEY_PFX = 'msg'
-ERROR_KEY_PFX = 'err'
-
-SLEEP_TIME = 0.5  # in seconds
-DEALER_KEY_TTL = int(SLEEP_TIME * 2) # in seconds
+from service import util
+from service.C import APP_ID, APP_NAME, DEALER_KEY, MESSAGE_KEY_PFX, ERROR_KEY_PFX, SLEEP_TIME, DEALER_KEY_TTL
 
 
 logger = logging.getLogger('{app}_{id}'.format(app=APP_NAME, id=APP_ID))
@@ -55,12 +46,17 @@ def read_message(connection):
     succes = util.get_succes_chance()
     message = ''
     with connection.pipeline() as pipe:
-        key = connection.scan_iter(match=MESSAGE_KEY_PFX + '*').__next__()
+        try:
+            key = connection.scan_iter(match=MESSAGE_KEY_PFX + '*').__next__()
+        except:
+            key = None
         if key:
             key_name = key.decode('utf-8')
             try:
                 pipe.watch(key_name)
-                message = pipe.get(key_name).decode('utf-8')
+                value = pipe.get(key_name)
+                if value:
+                    message = value.decode('utf-8')
                 pipe.multi()
                 if succes:
                     pipe.delete(key_name)

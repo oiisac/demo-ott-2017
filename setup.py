@@ -18,7 +18,7 @@ setuptools.setup(
     author="Helgi Oiisac",
     author_email="helgi@oiisac.com",
     packages=(
-        "app",
+        "service",
     ),
     install_requires=install_requires,
     entry_points={
