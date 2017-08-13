@@ -5,12 +5,16 @@ from time import sleep
 from redis.exceptions import WatchError
 
 from app import APP_NAME
-from app.util import get_random_string, get_redis_connect, get_succes_chance, is_errors_request
+from app import util
 
 
-APP_ID = get_random_string(5)
-DEALER_KEY = 'current_dealer'
-DEALER_KEY_TTL = 1 # in seconds
+APP_ID = util.get_random_string(5)
+DEALER_KEY = 'dealer'
+MESSAGE_KEY_PFX = 'msg'
+ERROR_KEY_PFX = 'err'
+
+SLEEP_TIME = 0.5  # in seconds
+DEALER_KEY_TTL = int(SLEEP_TIME * 2) # in seconds
 
 
 logger = logging.getLogger('{app}_{id}'.format(app=APP_NAME, id=APP_ID))
@@ -27,7 +31,7 @@ def set_as_dealer(connection):
                 pipe.set(DEALER_KEY, APP_ID, ex=DEALER_KEY_TTL)
         else:
             pipe.set(DEALER_KEY, APP_ID, ex=DEALER_KEY_TTL)
-            logger.info('App with {id} is new dealer'.format(id=APP_ID))
+            logger.info('App with id {id} is new dealer'.format(id=APP_ID))
         pipe.watch(DEALER_KEY)
         new_dealer = pipe.get(DEALER_KEY)
         pipe.execute()
@@ -35,72 +39,77 @@ def set_as_dealer(connection):
 
 
 def send_message(connection):
-    message = get_random_string(30)
-    key = APP_ID + get_random_string(5)
+    message = util.get_random_string(30)
+    key = '{pfx}_{time}_{app}'.format(pfx=MESSAGE_KEY_PFX, time=util.get_time_in_ms(), app=APP_ID)
     try:
         connection.setnx(key, message)
     except:
-        logger.error('App with {id} can\'t create key \"{key}\" with message \"{msg}\"'.format(id=APP_ID,
-                                                                                               key=key,
-                                                                                               msg=message))
+        logger.error('App with id {id} can\'t create key \"{key}\" with message \"{msg}\"'\
+            .format(id=APP_ID, key=key, msg=message))
     else:
-        logger.info('App with {id} created key \"{key}\" with message \"{msg}\"'.format(id=APP_ID,
-                                                                                        key=key,
-                                                                                        msg=message))
+        logger.info('App with id {id} created key \"{key}\" with message \"{msg}\"'\
+            .format(id=APP_ID, key=key, msg=message))
 
-def read_message(connection, key=None):
-    succes = get_succes_chance()
-    if not key:
-        key = connection.randomkey()
-    if key:
-        key_name = key.decode('utf-8')
-        if key_name != DEALER_KEY and not key_name.startswith('err_'):
-            with connection.pipeline() as pipe:
-                while True:
-                    try:
-                        pipe.watch(key_name)
-                        pipe.multi()
-                        message = pipe.get(key_name)
-                        if succes:
-                            pipe.delete(key)
-                        else:
-                            pipe.rename(key_name, 'err_' + key_name)
-                        result = pipe.execute()
-                        break
-                    except WatchError:
-                    finally:
-                        pipe.reset()
 
-            message = result[0].decode('utf-8')
+def read_message(connection):
+    succes = util.get_succes_chance()
+    message = ''
+    with connection.pipeline() as pipe:
+        key = connection.scan_iter(match=MESSAGE_KEY_PFX + '*').__next__()
+        if key:
+            key_name = key.decode('utf-8')
+            try:
+                pipe.watch(key_name)
+                message = pipe.get(key_name).decode('utf-8')
+                pipe.multi()
+                if succes:
+                    pipe.delete(key_name)
+                else:
+                    new_key_name = key_name.replace(MESSAGE_KEY_PFX, ERROR_KEY_PFX)
+                    pipe.rename(key_name, new_key_name)
+                result = pipe.execute()
+
+            except WatchError:
+                logger.error('Key \"{key}\" with message \"{msg}\" reused by other client'\
+                    .format(key=key_name, msg=message))
+
             if succes:
-                logger.info('App with {id} read key \"{key}\" with message \"{msg}\"'.format(id=APP_ID,
-                                                                                             key=key_name,
-                                                                                             msg=message))
+                logger.info('App with id {id} read key \"{key}\" with message \"{msg}\"'\
+                    .format(id=APP_ID, key=key_name, msg=message))
             else:
-                logger.warning('App with {id} read key \"{key}\" with malformed message \"{msg}\"'.format(id=APP_ID,
-                                                                                                  key=key_name,
-                                                                                                  msg=message))
+                logger.warning('App with id {id} read key \"{key}\" with malformed message \"{msg}\"'\
+                    .format(id=APP_ID, key=key_name, msg=message))
+
 
 def read_erros(connection):
-    keys = connection.keys(pattern='err_*')
-    if keys:
-        print(*[msg.decode('utf-8') + '\n' for msg in connection.mget(keys)])
-        with connection.pipeline() as pipe:
-            for key in keys:
-                pipe.delete(key)
-            pipe.execute()
+    keys = connection.scan_iter(match=ERROR_KEY_PFX + '*')
+    with connection.pipeline() as pipe:
+        for key in keys:
+            if pipe.watch(key):
+                print(pipe.get(key).decode('utf-8'))
+            pipe.delete(key)
+        pipe.execute()
+
+
+def clean_db(connection):
+    connection.flushdb()
+    print('All keys deleted.')
 
 
 if __name__ == "__main__":
-    connection = get_redis_connect()
+    connection = util.get_redis_connect()
 
     parser = argparse.ArgumentParser(description='Read/write value with redis DB')
-    parser.add_argument('--getErrors', help='Get all erorrs, print and exit', required=False)
+    parser.add_argument('--getErrors', help='Get all erorrs from DB, print on screen and exit',
+                        required=False, action='store_true')
+    parser.add_argument('--clean', help='Clean all keys in DB and exit', required=False, action='store_true')
 
     args = parser.parse_args()
 
-    if is_errors_request(args.getErrors):
+    if util.is_errors_request(args.getErrors):
         read_erros(connection)
+    elif util.is_clean_request(args.clean):
+        clean_db(connection)
     else:
         while True:
             if set_as_dealer(connection):

@@ -1,6 +1,7 @@
+import os
 import random
 import string
-import os
+import time
 
 import redis
 
@@ -16,9 +17,19 @@ def get_redis_connect():
     r = redis.Redis(connection_pool=pool)
     return r
 
+
 def get_succes_chance():
     return random.randint(1,20) != 1
+
 
 def is_errors_request(get_errors=None):
     if os.environ.get('GET_ERRORS', get_errors):
         return True
+
+def is_clean_request(clean=None):
+    if os.environ.get('CLEAN_DB', clean):
+        return True
+
+
+def get_time_in_ms():
+    return int(round(time.time() * 1000))
