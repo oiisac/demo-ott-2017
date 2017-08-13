@@ -1,6 +1,6 @@
 import os
 
-PACKAGE_VERSION = "0.2.0"
+PACKAGE_VERSION = "0.3.0"
 APP_NAME = 'demo_task_for_ott'
 
 REDIS_HOST = os.environ.get('REDIS_HOST', 'localhost')
