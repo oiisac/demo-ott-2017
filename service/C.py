@@ -13,6 +13,7 @@ REDIS_DB = 0
 DEALER_KEY = 'dealer'
 MESSAGE_KEY_PFX = 'msg'
 ERROR_KEY_PFX = 'err'
+LOCKED_KEY_PFX = 'lock'
 
 SLEEP_TIME = 0.5  # in seconds
 DEALER_KEY_TTL = int(SLEEP_TIME * 2) # in seconds

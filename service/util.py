@@ -6,6 +6,16 @@ import time
 import redis
 
 
+def is_key_locked(connection, key):
+    from service.C import LOCKED_KEY_PFX
+    if connection.get('{pfx}_{key}'.format(pfx=LOCKED_KEY_PFX, key=key)):
+        return True
+
+def set_key_locked(connection, key):
+    from service.C import LOCKED_KEY_PFX, SLEEP_TIME, APP_ID
+    return connection.set('{pfx}_{key}'.format(pfx=LOCKED_KEY_PFX, key=key), APP_ID, nx=True, px=int(SLEEP_TIME*1000))
+
+
 def get_random_string(n):
     """ Create random string with len `n`
     """

@@ -3,7 +3,7 @@ import unittest
 from unittest.mock import patch
 
 
-from service.util import get_redis_connect
+from service.util import get_redis_connect, get_random_string
 from service.main import (clean_db, set_as_dealer, send_message, read_message,
                           DEALER_KEY, APP_ID, DEALER_KEY_TTL, MESSAGE_KEY_PFX, ERROR_KEY_PFX)
 
@@ -16,7 +16,7 @@ class TestEndpoints(unittest.TestCase):
     def tearDown(self):
         clean_db(self.connection)
 
-    def test_set_as_dealer(self):
+    def test_set_as_dealer_true(self):
         init_value = self.connection.get(DEALER_KEY)
         set_as_dealer(self.connection)
         result_value = self.connection.get(DEALER_KEY).decode('utf-8')
@@ -25,6 +25,21 @@ class TestEndpoints(unittest.TestCase):
 
         self.assertEqual(init_value, None)
         self.assertEqual(result_value, APP_ID)
+        self.assertEqual(end_value, None)
+
+    @patch('redis.client.Pipeline.get')
+    def test_set_as_dealer_false(self, mock_get):
+        random_id = get_random_string(5)
+        mock_get.return_value = b'random_id'
+        self.connection.set(DEALER_KEY, random_id, ex=DEALER_KEY_TTL)
+        init_value = self.connection.get(DEALER_KEY).decode('utf-8')
+        set_as_dealer(self.connection)
+        result_value = self.connection.get(DEALER_KEY).decode('utf-8')
+        time.sleep(DEALER_KEY_TTL)
+        end_value = self.connection.get(DEALER_KEY)
+
+        self.assertTrue(init_value, random_id)
+        self.assertEqual(result_value, random_id)
         self.assertEqual(end_value, None)
 
     def test_send_message(self):

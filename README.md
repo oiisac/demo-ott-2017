@@ -14,14 +14,16 @@ demo task for OTT
 ## How to run
 1) inv build.redis
 2) inv build.app
-3) inv service.run
+3) inv service.start
 
 ## How to stop
 1) inv service.stop
-
 
 ## How to get errors
 1) inv service.errors
 
 ## How to get clean db
 1) inv service.clean
+
+## How to get logs
+1) inv service.logs

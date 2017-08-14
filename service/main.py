@@ -2,7 +2,7 @@ import argparse
 import logging
 from time import sleep
 
-from redis.exceptions import WatchError
+from redis.exceptions import WatchError, ResponseError
 
 from service import util
 from service.C import APP_ID, APP_NAME, DEALER_KEY, MESSAGE_KEY_PFX, ERROR_KEY_PFX, SLEEP_TIME, DEALER_KEY_TTL
@@ -29,9 +29,8 @@ def set_as_dealer(connection):
         else:
             pipe.set(DEALER_KEY, APP_ID, ex=DEALER_KEY_TTL)
             logger.info('App with id {id} is new dealer'.format(id=APP_ID))
-        pipe.watch(DEALER_KEY)
-        new_dealer = pipe.get(DEALER_KEY)
         pipe.execute()
+    new_dealer = connection.get(DEALER_KEY) or b''
     return new_dealer.decode('utf-8') == APP_ID
 
 
@@ -55,36 +54,30 @@ def read_message(connection):
     """
     succes = util.get_succes_chance()
     message = ''
-    with connection.pipeline() as pipe:
-        try:
-            key = connection.scan_iter(match=MESSAGE_KEY_PFX + '*').__next__()
-        except:
-            key = None
-        if key:
-            key_name = key.decode('utf-8')
-            try:
-                pipe.watch(key_name)
-                value = pipe.get(key_name)
+    try:
+        key = connection.scan_iter(match=MESSAGE_KEY_PFX + '*').__next__()
+    except:
+        key = b''
+    key_name = key.decode('utf-8')
+    if key_name:
+        if not util.is_key_locked(connection, key_name):
+            if util.set_key_locked(connection, key_name):
+                value = connection.get(key_name)
                 if value:
                     message = value.decode('utf-8')
-                pipe.multi()
                 if succes:
-                    pipe.delete(key_name)
+                    connection.delete(key_name)
                 else:
                     new_key_name = key_name.replace(MESSAGE_KEY_PFX, ERROR_KEY_PFX)
-                    pipe.rename(key_name, new_key_name)
-                result = pipe.execute()
-
-            except WatchError:
-                logger.error('Key \"{key}\" with message \"{msg}\" reused by other client'\
-                    .format(key=key_name, msg=message))
-
+                    result = connection.renamenx(key_name, new_key_name)
+        if message:
             if succes:
                 logger.info('App with id {id} read key \"{key}\" with message \"{msg}\"'\
                     .format(id=APP_ID, key=key_name, msg=message))
             else:
                 logger.warning('App with id {id} read key \"{key}\" with malformed message \"{msg}\"'\
                     .format(id=APP_ID, key=key_name, msg=message))
+            return True
 
 
 def read_erros(connection):
@@ -124,6 +117,8 @@ if __name__ == "__main__":
         while True:
             if set_as_dealer(connection):
                 send_message(connection)
+                sleep(SLEEP_TIME)
             else:
-                read_message(connection)
-            sleep(SLEEP_TIME)
+                read_result = read_message(connection)
+                if read_result:
+                    sleep(SLEEP_TIME)
